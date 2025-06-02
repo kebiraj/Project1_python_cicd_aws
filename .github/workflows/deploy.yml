@@ -60,7 +60,7 @@ jobs:
 
     - name: Send Email Notification
       if: always()
-      uses: prasannanehru786/flask-docker-ec2-deploy@v3
+      uses: kebiraj/Project1_python_cicd_aws@v3
       with:
        server_address: smtp.gmail.com
        server_port: 465
