@@ -21,6 +21,7 @@ jobs:
         run: |
           echo "📦 Archiving app..."
           tar --exclude='.git' --exclude='key.pem' --warning=no-file-changed -czf app.tar.gz . || true
+          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} 'mkdir -p ~/flaskapp'
           echo "📤 Copying archive to EC2..."
           scp -o StrictHostKeyChecking=no -i key.pem app.tar.gz ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/flaskapp
           echo "📦 Extracting app on EC2..."
