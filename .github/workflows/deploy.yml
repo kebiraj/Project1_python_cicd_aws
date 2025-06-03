@@ -10,69 +10,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-    - name: Setup SSH key
-      run: |
-        echo "${{ secrets.EC2_KEY }}" | base64 -d > key.pem
-        chmod 400 key.pem
-
-    - name: SSH and deploy Docker container
-      run: |
-        ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-          docker rm -f flaskapp || true
-          docker rmi flaskapp || true
-          mkdir -p ~/flaskapp
-          exit
-        EOF
-
-    
-    - name: Copy app to EC2
-      run: |
-       tar --exclude='.git' --exclude='key.pem' --warning=no-file-changed --ignore-failed-read -czf app.tar.gz .
-       scp -i key.pem -o StrictHostKeyChecking=no app.tar.gz ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/flaskapp
-       ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
-        cd ~/flaskapp
-        tar -xzf app.tar.gz
-        rm app.tar.gz
-       EOF
-
-
-    - name: Build and run container on EC2
-      run: |
-       ssh -T -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-        set -e
-        cd ~/flaskapp
-
-        echo "Building Docker image..."
-        docker build -t flaskapp .
-
-        echo "Stopping old container (if any)..."
-        docker rm -f flaskapp || true
-
-        echo "Running Docker container..."
-        docker run -d -p 5000:5000 --name flaskapp flaskapp
-
-        echo "Listing running containers..."
-        docker ps
-       EOF
-
-    - name: Send Email Notification
-      if: always()
-      uses: kebiraj/Project1_python_cicd_aws@v3
-      with:
-       server_address: smtp.gmail.com
-       server_port: 465
-       username: ${{ secrets.EMAIL_USERNAME }}
-       password: ${{ secrets.EMAIL_PASSWORD }}
-       subject: "Deployment Status: ${{ job.status }}"
-       to: ${{ secrets.EMAIL_RECIPIENT }}
-       from: ${{ secrets.EMAIL_USERNAME }}
-       content_type: text/plain
-       body: |
-        Deployment workflow finished with status: ${{ job.status }}
-        Repository: ${{ github.repository }}
-        Branch: ${{ github.ref }}
-        Commit: ${{ github.sha }}
-        Triggered by: ${{ github.actor }}
+      - name: Setup SSH key
+        run: |
+          echo "${{ secrets.EC2_KEY }}" | base64 -d > key.pem
+          chmod 400 key.pem
+      - name: Copy app to EC2
+        run: |
+          echo "📦 Archiving app..."
+          tar --exclude='.git' --exclude='key.pem' --warning=no-file-changed -czf app.tar.gz . || true
+          echo "📤 Copying archive to EC2..."
+          scp -o StrictHostKeyChecking=no -i key.pem app.tar.gz ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:~/flaskapp
+          echo "📦 Extracting app on EC2..."
+          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} <<EOF
+            cd ~/flaskapp
+            tar -xzf app.tar.gz
+            rm app.tar.gz
+          EOF
+      - name: Build and run Docker container on EC2
+        run: |
+          echo "🐳 Deploying container on EC2..."
+          ssh -o StrictHostKeyChecking=no -i key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} <<EOF
+            set -e
+            cd ~/flaskapp
+            echo "🔧 Building Docker image..."
+            docker build -t flaskapp .
+            echo "🛑 Removing old container if any..."
+            docker rm -f flaskapp || true
+            echo "🚀 Running Flask app..."
+            docker run -d -p 5000:5000 --name flaskapp flaskapp
+            echo "✅ Current running containers:"
+            docker ps
+          EOF
